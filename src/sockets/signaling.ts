@@ -1,6 +1,6 @@
 import { Server, Socket } from 'socket.io';
 import jwt from 'jsonwebtoken';
-import prisma from '../lib/db';
+import { User } from '../lib/db';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-key-change-me';
 
@@ -38,22 +38,18 @@ export const setupSignalingSockets = (io: Server) => {
     socketToEmail.set(socket.id, email);
 
     // Auto-Connect Logic 1: Same User
-    // If the same user is connected on another device, try to auto-connect them.
     const userSockets = activeUsers.get(email)!;
     if (userSockets.size > 1) {
       for (const otherSocketId of userSockets) {
         if (otherSocketId !== socket.id) {
-          // Tell the newly connected socket to initiate an offer to the other socket
           socket.emit('initiate-auto-connect', { targetEmail: email, targetSocketId: otherSocketId });
-          break; // Just connect to one for now
+          break; 
         }
       }
     } else {
       // Auto-Connect Logic 2: Default Target
-      // Check if this user has a default target set and auto-connect is enabled on client side
-      // The client will handle whether the toggle is on, but we can proactively notify if the target is online.
       try {
-        const dbUser = await prisma.user.findUnique({ where: { email }, select: { defaultTargetEmail: true } });
+        const dbUser = await User.findOne({ email }).select('defaultTargetEmail');
         if (dbUser?.defaultTargetEmail) {
           const targetSockets = activeUsers.get(dbUser.defaultTargetEmail);
           if (targetSockets && targetSockets.size > 0) {
@@ -70,7 +66,6 @@ export const setupSignalingSockets = (io: Server) => {
     socket.on('webrtc-offer', ({ targetEmail, targetSocketId, offer }) => {
       const targetSockets = activeUsers.get(targetEmail);
       if (targetSockets) {
-        // If a specific socket is provided (e.g. for same user), send to that. Otherwise send to the first one available.
         const socketIdToSend = (targetSocketId && targetSockets.has(targetSocketId)) 
           ? targetSocketId 
           : Array.from(targetSockets)[0];

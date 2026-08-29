@@ -7,7 +7,10 @@ import authRoutes from './routes/auth';
 import userRoutes from './routes/users';
 import { setupSignalingSockets } from './sockets/signaling';
 
+import { connectDB } from './lib/db';
+
 dotenv.config();
+connectDB();
 
 const app = express();
 const server = http.createServer(app);
