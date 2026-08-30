@@ -40,19 +40,37 @@ const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
 // Google OAuth
 router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
 
-router.get('/google/callback', passport.authenticate('google', { session: false, failureRedirect: `${FRONTEND_URL}?error=GoogleLoginFailed` }), (req, res) => {
-  const user = req.user as any;
-  const token = jwt.sign({ userId: user._id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
-  res.redirect(`${FRONTEND_URL}?token=${token}`);
+router.get('/google/callback', (req, res, next) => {
+  passport.authenticate('google', { session: false }, (err: any, user: any, info: any) => {
+    if (err) {
+      console.error('Google OAuth error:', err);
+      return res.redirect(`${FRONTEND_URL}?error=${encodeURIComponent(err.message || 'GoogleLoginFailed')}`);
+    }
+    if (!user) {
+      const msg = info?.message || 'GoogleLoginFailed';
+      return res.redirect(`${FRONTEND_URL}?error=${encodeURIComponent(msg)}`);
+    }
+    const token = jwt.sign({ userId: user._id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
+    res.redirect(`${FRONTEND_URL}?token=${token}`);
+  })(req, res, next);
 });
 
 // GitHub OAuth
 router.get('/github', passport.authenticate('github', { scope: ['user:email'] }));
 
-router.get('/github/callback', passport.authenticate('github', { session: false, failureRedirect: `${FRONTEND_URL}?error=GithubLoginFailed` }), (req, res) => {
-  const user = req.user as any;
-  const token = jwt.sign({ userId: user._id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
-  res.redirect(`${FRONTEND_URL}?token=${token}`);
+router.get('/github/callback', (req, res, next) => {
+  passport.authenticate('github', { session: false }, (err: any, user: any, info: any) => {
+    if (err) {
+      console.error('GitHub OAuth error:', err);
+      return res.redirect(`${FRONTEND_URL}?error=${encodeURIComponent(err.message || 'GithubLoginFailed')}`);
+    }
+    if (!user) {
+      const msg = info?.message || 'GithubLoginFailed';
+      return res.redirect(`${FRONTEND_URL}?error=${encodeURIComponent(msg)}`);
+    }
+    const token = jwt.sign({ userId: user._id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
+    res.redirect(`${FRONTEND_URL}?token=${token}`);
+  })(req, res, next);
 });
 
 export default router;
