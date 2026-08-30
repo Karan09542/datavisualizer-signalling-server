@@ -43,7 +43,7 @@ export const setupSignalingSockets = (io: Server) => {
     socketToEmail.set(socket.id, email);
 
     // Signaling events
-    socket.on('webrtc-offer', ({ targetEmail, targetSocketId, offer }) => {
+    socket.on('webrtc-offer', ({ targetEmail, targetSocketId, offer, senderProfile }) => {
       const targetSockets = activeUsers.get(targetEmail);
       if (targetSockets) {
         let socketIdToSend = targetSocketId;
@@ -59,10 +59,19 @@ export const setupSignalingSockets = (io: Server) => {
         if (socketIdToSend && socketIdToSend !== socket.id) {
           io.to(socketIdToSend).emit('webrtc-offer', {
             senderEmail: email,
+            senderProfile,
             senderSocketId: socket.id,
             offer
           });
         }
+      }
+    });
+
+    socket.on('webrtc-reject', ({ targetSocketId }) => {
+      if (targetSocketId) {
+        io.to(targetSocketId).emit('webrtc-reject', {
+          senderEmail: email
+        });
       }
     });
 
