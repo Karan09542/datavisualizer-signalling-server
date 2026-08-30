@@ -84,7 +84,9 @@ router.get('/search', authenticate, async (req: AuthRequest, res) => {
                             .limit(10);
 
     const usersWithPresence = users.map(user => {
-      const isOnline = getActiveConnectionsCount(user.email) > 0;
+      const isMyOwnEmail = user.email === req.user!.email;
+      const connections = getActiveConnectionsCount(user.email);
+      const isOnline = isMyOwnEmail ? connections > 1 : connections > 0;
       return {
         ...user.toObject(),
         isOnline

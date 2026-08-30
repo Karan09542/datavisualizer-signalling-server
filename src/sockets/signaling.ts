@@ -127,6 +127,17 @@ export const setupSignalingSockets = (io: Server) => {
       socket.emit('presence-result', presence);
     });
 
+    socket.on('user-profile-updated', (userData: any) => {
+      const userSockets = activeUsers.get(email);
+      if (userSockets) {
+        for (const sId of userSockets) {
+          if (sId !== socket.id) {
+            io.to(sId).emit('user-profile-updated', userData);
+          }
+        }
+      }
+    });
+
     socket.on('disconnect', () => {
       console.log(`User disconnected: ${email} (Socket ID: ${socket.id})`);
       const userSockets = activeUsers.get(email);
