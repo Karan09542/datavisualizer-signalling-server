@@ -43,7 +43,7 @@ router.put('/me', authenticate, upload.single('photo'), async (req: AuthRequest,
     }
 
     const updatedUser = await User.findByIdAndUpdate(userId, dataToUpdate, { new: true })
-                                  .select('email username photoUrl defaultTargetEmail');
+                                  .select('email username photoUrl defaultTargetEmail autoConnectEnabled');
 
     res.json(updatedUser);
   } catch (error) {
@@ -52,14 +52,18 @@ router.put('/me', authenticate, upload.single('photo'), async (req: AuthRequest,
   }
 });
 
-// Update default target
+// Update default target and auto connect settings
 router.put('/me/default-target', authenticate, async (req: AuthRequest, res) => {
   try {
     const userId = req.user!.userId;
-    const { defaultTargetEmail } = req.body;
+    const { defaultTargetEmail, autoConnectEnabled } = req.body;
+    
+    const updates: any = {};
+    if (defaultTargetEmail !== undefined) updates.defaultTargetEmail = defaultTargetEmail;
+    if (autoConnectEnabled !== undefined) updates.autoConnectEnabled = autoConnectEnabled;
 
-    const updatedUser = await User.findByIdAndUpdate(userId, { defaultTargetEmail }, { new: true })
-                                  .select('email username photoUrl defaultTargetEmail');
+    const updatedUser = await User.findByIdAndUpdate(userId, updates, { new: true })
+                                  .select('email username photoUrl defaultTargetEmail autoConnectEnabled');
     res.json(updatedUser);
   } catch (error) {
     console.error('Update default target error:', error);

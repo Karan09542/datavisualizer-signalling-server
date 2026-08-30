@@ -16,6 +16,7 @@ const userSchema = new mongoose.Schema({
   passwordHash: { type: String, required: false },
   photoUrl: { type: String, required: false }, // Cloudinary URL
   defaultTargetEmail: { type: String, required: false },
+  autoConnectEnabled: { type: Boolean, default: false },
 }, { timestamps: true });
 
 export const User = mongoose.models.User || mongoose.model('User', userSchema);

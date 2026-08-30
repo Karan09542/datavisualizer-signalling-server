@@ -42,31 +42,6 @@ export const setupSignalingSockets = (io: Server) => {
     activeUsers.get(email)!.add(socket.id);
     socketToEmail.set(socket.id, email);
 
-    // Auto-Connect Logic 1: Same User
-    const userSockets = activeUsers.get(email)!;
-    if (userSockets.size > 1) {
-      for (const otherSocketId of userSockets) {
-        if (otherSocketId !== socket.id) {
-          socket.emit('initiate-auto-connect', { targetEmail: email, targetSocketId: otherSocketId });
-          break; 
-        }
-      }
-    } else {
-      // Auto-Connect Logic 2: Default Target
-      try {
-        const dbUser = await User.findOne({ email }).select('defaultTargetEmail');
-        if (dbUser?.defaultTargetEmail) {
-          const targetSockets = activeUsers.get(dbUser.defaultTargetEmail);
-          if (targetSockets && targetSockets.size > 0) {
-            const targetSocketId = Array.from(targetSockets)[0];
-            socket.emit('initiate-auto-connect', { targetEmail: dbUser.defaultTargetEmail, targetSocketId });
-          }
-        }
-      } catch (e) {
-        console.error('Error checking default target on connection', e);
-      }
-    }
-
     // Signaling events
     socket.on('webrtc-offer', ({ targetEmail, targetSocketId, offer }) => {
       const targetSockets = activeUsers.get(targetEmail);
