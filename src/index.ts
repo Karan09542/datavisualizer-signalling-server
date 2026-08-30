@@ -10,17 +10,21 @@ import { connectDB } from './lib/db';
 
 dotenv.config();
 
+const ALLOWED_ORIGIN = process.env.NODE_ENV === 'production'
+  ? 'https://datavisualizer.urlmediainspector.dev'
+  : '*';
+
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: "*",
+    origin: ALLOWED_ORIGIN,
     methods: ["GET", "POST", "PUT", "DELETE"]
   }
 });
 
 // Middleware
-app.use(cors());
+app.use(cors({ origin: ALLOWED_ORIGIN }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
