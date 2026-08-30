@@ -14,6 +14,8 @@ const userSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true },
   username: { type: String, required: true },
   passwordHash: { type: String, required: false },
+  googleId: { type: String, required: false },
+  githubId: { type: String, required: false },
   photoUrl: { type: String, required: false }, // Cloudinary URL
   defaultTargetEmail: { type: String, required: false },
   autoConnectEnabled: { type: Boolean, default: false },

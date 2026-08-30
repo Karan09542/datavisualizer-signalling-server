@@ -7,6 +7,7 @@ import authRoutes from './routes/auth';
 import userRoutes from './routes/users';
 import { setupSignalingSockets } from './sockets/signaling';
 import { connectDB } from './lib/db';
+import passport from './lib/passport';
 
 dotenv.config();
 
@@ -27,6 +28,7 @@ const io = new Server(server, {
 app.use(cors({ origin: ALLOWED_ORIGIN }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(passport.initialize());
 
 // Health check (no auth required)
 app.get('/health', (_req, res) => {

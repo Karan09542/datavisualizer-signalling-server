@@ -3,9 +3,17 @@ import jwt from 'jsonwebtoken';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-key-change-me';
 
-export interface AuthRequest extends Request {
-  user?: { userId: string, email: string };
+declare global {
+  namespace Express {
+    interface User {
+      userId: string;
+      email: string;
+      _id?: any;
+    }
+  }
 }
+
+export interface AuthRequest extends Request {}
 
 export const authenticate = (req: AuthRequest, res: Response, next: NextFunction) => {
   const authHeader = req.headers.authorization;

@@ -4,6 +4,7 @@ import { v2 as cloudinary } from 'cloudinary';
 import { User } from '../lib/db';
 import { authenticate, AuthRequest } from '../lib/authMiddleware';
 import { getActiveConnectionsCount } from '../sockets/signaling';
+import bcrypt from 'bcryptjs';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } }); // 5MB limit
@@ -15,15 +16,34 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET 
 });
 
+// Get current user profile
+router.get('/me', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const userId = req.user!.userId;
+    const user = await User.findById(userId).select('email username photoUrl defaultTargetEmail autoConnectEnabled');
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    res.json(user);
+  } catch (error) {
+    console.error('Get profile error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Update username or photo
 router.put('/me', authenticate, upload.single('photo'), async (req: AuthRequest, res) => {
   try {
     const userId = req.user!.userId;
-    const { username } = req.body;
+    const { username, password } = req.body;
     const file = req.file;
 
     const dataToUpdate: any = {};
     if (username) dataToUpdate.username = username;
+    if (password) {
+      const passwordHash = await bcrypt.hash(password, 10);
+      dataToUpdate.passwordHash = passwordHash;
+    }
 
     if (file) {
       // Upload to Cloudinary using a stream
