@@ -3,6 +3,7 @@ import multer from 'multer';
 import { v2 as cloudinary } from 'cloudinary';
 import { User } from '../lib/db';
 import { authenticate, AuthRequest } from '../lib/authMiddleware';
+import { getActiveConnectionsCount } from '../sockets/signaling';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } }); // 5MB limit
@@ -78,7 +79,15 @@ router.get('/search', authenticate, async (req: AuthRequest, res) => {
                             .select('email username photoUrl')
                             .limit(10);
 
-    res.json(users);
+    const usersWithPresence = users.map(user => {
+      const isOnline = getActiveConnectionsCount(user.email) > 0;
+      return {
+        ...user.toObject(),
+        isOnline
+      };
+    });
+
+    res.json(usersWithPresence);
   } catch (error) {
     console.error('Search users error:', error);
     res.status(500).json({ error: 'Internal server error' });

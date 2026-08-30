@@ -9,7 +9,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-key-change-me';
 // Register
 router.post('/register', async (req, res) => {
   try {
-    const { email, password, username } = req.body;
+    const { email, password, username, photoUrl } = req.body;
 
     if (!email || !password || !username) {
       return res.status(400).json({ error: 'Missing required fields' });
@@ -25,11 +25,12 @@ router.post('/register', async (req, res) => {
       email,
       username,
       passwordHash,
+      photoUrl,
     });
     await user.save();
 
     const token = jwt.sign({ userId: user._id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
-    res.json({ token, user: { id: user._id, email: user.email, username: user.username } });
+    res.json({ token, user: { id: user._id, email: user.email, username: user.username, photoUrl: user.photoUrl } });
   } catch (error) {
     console.error('Register error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -52,7 +53,7 @@ router.post('/login', async (req, res) => {
     }
 
     const token = jwt.sign({ userId: user._id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
-    res.json({ token, user: { id: user._id, email: user.email, username: user.username } });
+    res.json({ token, user: { id: user._id, email: user.email, username: user.username, photoUrl: user.photoUrl } });
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ error: 'Internal server error' });
