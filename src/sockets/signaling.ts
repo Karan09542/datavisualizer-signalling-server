@@ -30,6 +30,18 @@ export const getDevicesForEmail = (email: string, excludeSocketId?: string): Dev
     .sort((a, b) => a.connectedAt - b.connectedAt);
 };
 
+/**
+ * Connection requests waiting for an answer, by the requesting socket. A request to another
+ * account goes to every device signed in there; the first to accept takes it.
+ */
+interface PendingOffer {
+  senderEmail: string;
+  targets: Set<string>;
+  /** The device that accepted, once one has. */
+  takenBy?: string;
+}
+const pendingOffers = new Map<string, PendingOffer>();
+
 export const getActiveConnectionsCount = (email: string): number => {
   return activeUsers.get(email)?.size || 0;
 };
@@ -88,39 +100,81 @@ export const setupSignalingSockets = (io: Server) => {
     });
 
     // Signaling events
+    /** Withdraws this socket's open request from the devices it went to. */
+    const cancelOwnOffer = () => {
+      const pending = pendingOffers.get(socket.id);
+      if (!pending) return;
+      pendingOffers.delete(socket.id);
+      if (pending.takenBy) return;
+      for (const sId of pending.targets) io.to(sId).emit('webrtc-offer-cancelled', { senderSocketId: socket.id });
+    };
+
     socket.on('webrtc-offer', ({ targetEmail, targetSocketId, offer, senderProfile }) => {
       const targetSockets = activeUsers.get(targetEmail);
-      if (targetSockets) {
-        let socketIdToSend = targetSocketId && targetSockets.has(targetSocketId) ? targetSocketId : undefined;
-        if (!socketIdToSend || socketIdToSend === socket.id) {
-          for (const sId of targetSockets) {
-            if (sId !== socket.id) {
-              socketIdToSend = sId;
-              break;
-            }
-          }
-        }
-        
-        if (socketIdToSend && socketIdToSend !== socket.id) {
-          io.to(socketIdToSend).emit('webrtc-offer', {
-            senderEmail: email,
-            senderProfile,
-            senderSocketId: socket.id,
-            offer
-          });
-        }
-      }
-    });
+      // A new request replaces this socket's earlier one.
+      cancelOwnOffer();
+      if (!targetSockets) return;
 
-    socket.on('webrtc-reject', ({ targetSocketId }) => {
-      if (targetSocketId) {
-        io.to(targetSocketId).emit('webrtc-reject', {
-          senderEmail: email
+      let targets: string[] = [];
+      if (targetSocketId && targetSockets.has(targetSocketId) && targetSocketId !== socket.id) {
+        // A chosen device
+        targets = [targetSocketId];
+      } else if (targetEmail !== email) {
+        // Someone else's account: every device signed in there can accept
+        targets = [...targetSockets];
+      } else {
+        // My own account, no device chosen: the first other one
+        const first = [...targetSockets].find((sId) => sId !== socket.id);
+        if (first) targets = [first];
+      }
+      targets = targets.filter((sId) => sId !== socket.id);
+      if (targets.length === 0) return;
+
+      pendingOffers.set(socket.id, { senderEmail: email, targets: new Set(targets) });
+      for (const sId of targets) {
+        io.to(sId).emit('webrtc-offer', {
+          senderEmail: email,
+          senderProfile,
+          senderSocketId: socket.id,
+          offer
         });
       }
     });
 
+    // The requester gave up (left, or started over)
+    socket.on('webrtc-cancel-offer', () => cancelOwnOffer());
+
+    socket.on('webrtc-reject', ({ targetSocketId }) => {
+      if (!targetSocketId) return;
+      const pending = pendingOffers.get(targetSocketId);
+      if (pending && pending.targets.has(socket.id) && !pending.takenBy) {
+        // One device said no; the request stays open on the others until all have.
+        pending.targets.delete(socket.id);
+        if (pending.targets.size > 0) return;
+        pendingOffers.delete(targetSocketId);
+      }
+      io.to(targetSocketId).emit('webrtc-reject', {
+        senderEmail: email
+      });
+    });
+
     socket.on('webrtc-answer', ({ targetEmail, targetSocketId, answer }) => {
+      const pending = targetSocketId ? pendingOffers.get(targetSocketId) : undefined;
+      if (pending) {
+        if (pending.takenBy && pending.takenBy !== socket.id) {
+          // Another device accepted first: this one backs out.
+          socket.emit('webrtc-offer-taken', { senderSocketId: targetSocketId, senderEmail: pending.senderEmail });
+          return;
+        }
+        if (!pending.takenBy) {
+          pending.takenBy = socket.id;
+          for (const sId of pending.targets) {
+            if (sId !== socket.id) {
+              io.to(sId).emit('webrtc-offer-taken', { senderSocketId: targetSocketId, senderEmail: pending.senderEmail });
+            }
+          }
+        }
+      }
       let socketIdToSend = targetSocketId;
       if (!socketIdToSend && targetEmail) {
         const targetSockets = activeUsers.get(targetEmail);
@@ -144,6 +198,15 @@ export const setupSignalingSockets = (io: Server) => {
     });
 
     socket.on('webrtc-ice-candidate', ({ targetEmail, targetSocketId, candidate }) => {
+      // Before anyone accepts, the requester doesn't know which device will: send to all it asked.
+      const pending = !targetSocketId ? pendingOffers.get(socket.id) : undefined;
+      if (pending) {
+        const to = pending.takenBy ? [pending.takenBy] : [...pending.targets];
+        for (const sId of to) {
+          io.to(sId).emit('webrtc-ice-candidate', { senderEmail: email, senderSocketId: socket.id, candidate });
+        }
+        return;
+      }
       let socketIdToSend = targetSocketId;
       if (!socketIdToSend && targetEmail) {
         const targetSockets = activeUsers.get(targetEmail);
@@ -203,6 +266,15 @@ export const setupSignalingSockets = (io: Server) => {
       }
       socketToEmail.delete(socket.id);
       deviceInfo.delete(socket.id);
+      // Its own request is withdrawn; a request it was one of the targets of loses it
+      cancelOwnOffer();
+      for (const [senderId, pending] of pendingOffers) {
+        if (!pending.targets.delete(socket.id) || pending.takenBy) continue;
+        if (pending.targets.size === 0) {
+          pendingOffers.delete(senderId);
+          io.to(senderId).emit('webrtc-reject', { senderEmail: email });
+        }
+      }
       broadcastDeviceList(email);
     });
   });
