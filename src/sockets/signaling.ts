@@ -113,7 +113,9 @@ export const setupSignalingSockets = (io: Server) => {
       const targetSockets = activeUsers.get(targetEmail);
       // A new request replaces this socket's earlier one.
       cancelOwnOffer();
-      if (!targetSockets) return;
+      // Nobody there (signed out, or offline): tell the sender instead of leaving it waiting
+      const unavailable = () => socket.emit('webrtc-unavailable', { targetEmail });
+      if (!targetSockets) return unavailable();
 
       let targets: string[] = [];
       if (targetSocketId && targetSockets.has(targetSocketId) && targetSocketId !== socket.id) {
@@ -128,7 +130,7 @@ export const setupSignalingSockets = (io: Server) => {
         if (first) targets = [first];
       }
       targets = targets.filter((sId) => sId !== socket.id);
-      if (targets.length === 0) return;
+      if (targets.length === 0) return unavailable();
 
       pendingOffers.set(socket.id, { senderEmail: email, targets: new Set(targets) });
       for (const sId of targets) {
